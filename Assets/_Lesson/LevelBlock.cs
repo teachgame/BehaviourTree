@@ -18,6 +18,14 @@ public class LevelBlock : IComparable<LevelBlock>
 
     public bool debugHighlight;
 
+    public bool isAstarChecked;
+
+    public int astar_f { get { return astar_g + astar_h; } }
+    public int astar_g;
+    public int astar_h;
+
+    public LevelBlock lastBlock;
+
     public LevelBlock(int row, int col,Vector3 pos)
     {
         this.row = row;

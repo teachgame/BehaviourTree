@@ -21,6 +21,10 @@ public class LevelScanner : MonoBehaviour
     LevelBlock[] levelBlocks;
     List<LevelBlock> blocksOnMesh = new List<LevelBlock>();
 
+    LevelBlock startBlock;
+    LevelBlock endBlock;
+    LevelBlock[] pathBlocks;
+
     Vector3 offset = new Vector3(-36, 0, -36);
 
     float evaluateTimer = 0;
@@ -83,8 +87,25 @@ public class LevelScanner : MonoBehaviour
 
         if(Input.GetKeyDown(KeyCode.T))
         {
-            TestSort();
+            startBlock = GetPlayerBlock();
+
+            for (int i = 0; i < levelBlocks.Length; i++)
+            {
+                levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
+            }
+
+            pathBlocks = AStarPathfinding(startBlock, GetBlock(18,18));
         }
+    }
+
+    LevelBlock GetPlayerBlock()
+    {
+        int row;
+        int col;
+
+        GetBlockPosByPosition(transform.position, out col, out row);
+
+        return GetBlock(row, col);
     }
 
     public void OnHealthPickup()
@@ -287,7 +308,7 @@ public class LevelScanner : MonoBehaviour
         }
     }
 
-    public List<LevelBlock> GetBlocksInRange(Vector3 center, int radius)
+    public List<LevelBlock> GetBlocksInRange(Vector3 center, int radius, bool excludeCenterBlock = false)
     {
         int centerCol;
         int centerRow;
@@ -300,6 +321,8 @@ public class LevelScanner : MonoBehaviour
         {
             for (int offset_row = -radius; offset_row <= radius; offset_row++)
             {
+                if (excludeCenterBlock && offset_col == 0 && offset_row == 0) continue;
+
                 int currentRow = centerRow + offset_row;
                 int currentCol = centerCol + offset_col;
 
@@ -454,6 +477,119 @@ public class LevelScanner : MonoBehaviour
         //Debug.Log("x:" + blockPos_x + ",y:" + blockPos_y);
     }
 
+    LevelBlock[] AStarPathfinding(LevelBlock startBlock, LevelBlock endBlock)
+    {
+        List<LevelBlock> openList = new List<LevelBlock>();     // 等待检查的节点
+        List<LevelBlock> closedList = new List<LevelBlock>();   // 已经检查完毕的节点
+
+        openList.Add(startBlock);   // 将起始节点添加到openList
+
+        // 循环直至没有节点等待检查，或者发现有效路径
+        while (openList.Count > 0)
+        {
+            // 找出等待检查的节点中移动成本 f 最低的一个
+            LevelBlock currentBlock = openList[0];
+            currentBlock.astar_g = CaculateMoveCost(startBlock, currentBlock);
+            currentBlock.astar_h = CaculateMoveCost(endBlock, currentBlock);
+            int fmin = currentBlock.astar_f;
+
+            for (int i = 0; i < openList.Count; i++)
+            {
+                openList[i].astar_g = CaculateMoveCost(startBlock, openList[i]);
+                openList[i].astar_h = CaculateMoveCost(endBlock, openList[i]);
+
+                int f = openList[i].astar_f;
+
+                if (f < fmin)
+                {
+                    currentBlock = openList[i];
+                    fmin = f;
+                }
+            }
+
+
+            // 找到移动成本最低的节点，设置为当前节点，将它移入检查完成的节点列表closedList
+            // 如果当前节点就是目标节点，执行保存路径操作
+            // 否则，将当前节点周边八格里面未检查的节点添加进openList，等待检查
+
+            openList.Remove(currentBlock);
+            closedList.Add(currentBlock);
+
+            // 如果找到了目标节点，就进入保存路径操作
+            if (currentBlock == endBlock)
+            {
+                // 从目标节点往回找，直至回到开始节点
+
+                Debug.Log("找到路径");
+
+                LevelBlock backSearchBlock = endBlock;
+
+                List<LevelBlock> path = new List<LevelBlock>();
+
+                path.Add(backSearchBlock);
+
+                while(backSearchBlock != startBlock)
+                {
+                    backSearchBlock = backSearchBlock.lastBlock;
+                    path.Add(backSearchBlock);
+                }
+
+                path.Reverse();
+
+                return path.ToArray();
+            }
+
+
+            // 将周边八格里面未检查的节点添加进待检查列表openList
+            List<LevelBlock> neighborBlocks = GetBlocksInRange(currentBlock.pos, 1, true);
+
+            for (int i = 0; i < neighborBlocks.Count; i++)
+            {
+                // 不在导航网格上的节点，忽略
+                if (!neighborBlocks[i].isOnNavMesh) continue;
+
+                // 已经检查过的节点，忽略
+                if (closedList.Contains(neighborBlocks[i])) continue;
+
+                //neighborBlocks[i].astar_g = CaculateMoveCost(startBlock, neighborBlocks[i]);
+                //neighborBlocks[i].astar_h = CaculateMoveCost(endBlock, neighborBlocks[i]);
+
+                // 已经被放入openList的节点，不需重复放入
+                if(openList.Contains(neighborBlocks[i]))
+                {
+                    continue;
+                }
+
+                // 记录本节点在路径上的前一个节点，最后回溯路径的时候，根据这个变量，一步步走回头路，回到起点
+                neighborBlocks[i].lastBlock = currentBlock;
+
+                // 添加进待检查列表openList
+                openList.Add(neighborBlocks[i]);
+            }
+        }
+
+        // 待检查列表openList被清空后依然没有找到目标位置，说明路径不存在
+        return null;
+    }
+
+    int CaculateMoveCost(LevelBlock startBlock, LevelBlock endBlock, LevelBlock currentBlock)
+    {
+        int g = CaculateMoveCost(startBlock, currentBlock);
+        int h = CaculateMoveCost(endBlock, currentBlock);
+
+        int f = g + h;
+
+        return f;
+    }
+
+    int CaculateMoveCost(LevelBlock startBlock, LevelBlock endBlock)
+    {
+        int distance_x = startBlock.col - endBlock.col;
+        int distance_y = startBlock.row - endBlock.row;
+
+        return distance_x * distance_x + distance_y * distance_y;
+    }
+
     void ResetDebugHighlight()
     {
         if(levelBlocks != null)
@@ -519,6 +655,28 @@ public class LevelScanner : MonoBehaviour
             {
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawCube(blockWithHealth.pos + Vector3.up * 5, new Vector3(0.1f, 10f, 0.1f));
+            }
+
+            if(startBlock != null)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawCube(startBlock.pos + Vector3.up * 0.5f, new Vector3(0.1f, 1f, 0.1f));
+            }
+
+            if (endBlock != null)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawCube(startBlock.pos + Vector3.up * 2.5f, new Vector3(0.3f, 5f, 0.3f));
+            }
+
+            if(pathBlocks != null)
+            {
+                for(int i = 0; i < pathBlocks.Length; i++)
+                {
+                    float height = Mathf.Lerp(1, 5, (float)i / pathBlocks.Length);
+                    Gizmos.color = Color.Lerp(Color.cyan, Color.magenta, (float)i / pathBlocks.Length);
+                    Gizmos.DrawCube(pathBlocks[i].pos + Vector3.up * height / 2, new Vector3(0.2f, height, 0.2f));
+                }
             }
         }
     }
