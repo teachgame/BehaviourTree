@@ -31,7 +31,7 @@ public class FindSafePositionActionTask : ActionTask
 
     private void FindSafePosition()
     {
-        LevelBlock[] safePathNodes = levelScanner.GetSafePath(ownerAgent.transform.position);
+        LevelBlock[] safePathNodes = levelScanner.GetSafePath(ownerAgent.transform.position, 2);
 
         if (safePathNodes.Length > 0)
         {

@@ -66,6 +66,7 @@ namespace NodeCanvas.Tasks.Actions
 
         protected override void OnUpdate()
         {
+            index = Mathf.Clamp(index, 0, targetList.value.Count - 1);
             var targetPos = targetList.value[index].pos;
             if (lastRequest != targetPos)
             {

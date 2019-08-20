@@ -14,6 +14,16 @@ public class LevelBlock : IComparable<LevelBlock>
 
     public int enemyCount;
 
+    public int occulsion_mul_enemyCount { get { return occulsion * enemyCount; } }
+
+    public float occulsion_reverse { get { return (occulsion == 0 ?  0 : 1f / occulsion); } }
+
+    public float enemyCount_reverse { get { return (enemyCount == 0 ? 0 : 1f / enemyCount); } }
+
+    public float occulsion_div_enemyCount { get { return (enemyCount == 0 ? 0 : (float)occulsion / enemyCount); } }
+
+    public float enemyCount_div_occulsion { get { return (occulsion == 0 ? 0 : (float)enemyCount / occulsion); } }
+
     public bool isOnNavMesh;
 
     public bool debugHighlight;
@@ -39,5 +49,13 @@ public class LevelBlock : IComparable<LevelBlock>
         int result = this.threatScore.CompareTo(other.threatScore);
         //Debug.Log(this.threatScore + ":" + other.threatScore + ",result:" + result);
         return result;
+    }
+
+    public void EvaluateThreat(float[] factors)
+    {
+        this.threatScore =
+            (int)(occulsion * factors[0] + enemyCount * factors[1] +
+            occulsion_reverse * factors[2] + enemyCount_reverse * factors[3] +
+            occulsion_mul_enemyCount * factors[4] + occulsion_div_enemyCount * factors[5] + enemyCount_div_occulsion * factors[6]);
     }
 }

@@ -34,6 +34,8 @@ public class LevelScanner : MonoBehaviour
 
     private LevelBlock blockWithHealth;
 
+    public float[] factors;
+
     // Start is called before the first frame update
     void Awake()
     {
@@ -91,7 +93,8 @@ public class LevelScanner : MonoBehaviour
 
             for (int i = 0; i < levelBlocks.Length; i++)
             {
-                levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
+                levelBlocks[i].EvaluateThreat(factors);
+                //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
             }
 
             pathBlocks = AStarPathfinding(startBlock, GetBlock(18,18));
@@ -150,58 +153,43 @@ public class LevelScanner : MonoBehaviour
     {
         int threatScore = 0;
 
-        for (int offset_col = -radius; offset_col <= radius; offset_col++)
+        List<LevelBlock> blocksInRange = GetBlocksInRange(levelBlock.pos, radius);
+
+        for(int i = 0; i < blocksInRange.Count; i++)
         {
-            for (int offset_row = -radius; offset_row <= radius; offset_row++)
+            int relativePos = Mathf.Abs(levelBlock.row - blocksInRange[i].row) + Mathf.Abs(levelBlock.col - blocksInRange[i].col);
+
+            int baseScore = (int)(blocksInRange[i].enemyCount * (1 + (float)blocksInRange[i].occulsion / 8) * 10 + blocksInRange[i].occulsion);
+            float scoreFactor = 1f;
+
+            if (relativePos == 0)
             {
-                int neighborRow = levelBlock.row + offset_row;
-                int neighborCol = levelBlock.col + offset_col;
-
-                bool neighborRowInside = Mathf.Clamp(neighborRow, 0, this.row - 1) == neighborRow;
-                bool neighborColInside = Mathf.Clamp(neighborCol, 0, this.col - 1) == neighborCol;
-
-                if (neighborColInside && neighborRowInside)
-                {
-                    int currentBlockIdx = neighborRow * this.col + neighborCol;
-                    LevelBlock neighborBlock = levelBlocks[currentBlockIdx];
-
-                    if (neighborBlock.isOnNavMesh)
-                    {
-                        int relativePos = Mathf.Abs(offset_row) + Mathf.Abs(offset_col);
-
-                        int baseScore = (int)(neighborBlock.enemyCount * (1 + (float)neighborBlock.occulsion / 8) * 100 + neighborBlock.occulsion);
-                        float scoreFactor = 1f;
-
-                        if (relativePos == 0)
-                        {
-                            scoreFactor = 1f;
-                        }
-
-                        if(relativePos == 1)
-                        {
-                            scoreFactor = 0.8f;
-                        }
-
-                        if (relativePos == 2)
-                        {
-                            scoreFactor = 0.5f;
-                        }
-
-                        if (relativePos == 3)
-                        {
-                            scoreFactor = 0.4f;
-                        }
-
-                        if (relativePos > 3)
-                        {
-                            scoreFactor = 0;
-                        }
-
-                        threatScore += (int)(baseScore * scoreFactor);
-                    }
-                }
+                scoreFactor = 1f;
             }
+
+            if (relativePos == 1)
+            {
+                scoreFactor = 0.8f;
+            }
+
+            if (relativePos == 2)
+            {
+                scoreFactor = 0.5f;
+            }
+
+            if (relativePos == 3)
+            {
+                scoreFactor = 0.4f;
+            }
+
+            if (relativePos > 3)
+            {
+                scoreFactor = 0;
+            }
+
+            threatScore += (int)(baseScore * scoreFactor);
         }
+
         //Debug.Log(levelBlock.row + "," + levelBlock.col + ":" + threatScore);
         return threatScore;
     }
@@ -243,31 +231,6 @@ public class LevelScanner : MonoBehaviour
 
                     occulsion = 9 - blocksInRange.Count;
                 }
-
-                //for(int offset_col = -1; offset_col < 2; offset_col++)
-                //{
-                //    for (int offset_row = -1; offset_row < 2; offset_row++)
-                //    {
-                //        int neighborRow = row + offset_row;
-                //        int neighborCol = col + offset_col;
-
-                //        bool neighborRowInside = Mathf.Clamp(neighborRow, 0, this.row - 1) == neighborRow;
-                //        bool neighborColInside = Mathf.Clamp(neighborCol, 0, this.col - 1) == neighborCol;
-
-                //        if(neighborColInside && neighborRowInside)
-                //        {
-                //            LevelBlock neighborBlock = levelBlocks[neighborRow * this.col + neighborCol];
-                //            if(!neighborBlock.isOnNavMesh)
-                //            {
-                //                occulsion += 1;
-                //            }
-                //        }
-                //        else
-                //        {
-                //            occulsion += 1;
-                //        }
-                //    }
-                //}
 
                 return occulsion;
             }
@@ -350,6 +313,19 @@ public class LevelScanner : MonoBehaviour
         return GetSafePath(center, 3, 1, 0.1f);
     }
 
+    public LevelBlock[] GetSafePath(Vector3 center, int radius)
+    {
+        ResetDebugHighlight();
+
+        endBlock = GetSafePosition(radius);
+
+        startBlock = GetBlock(transform.position);
+
+        pathBlocks = AStarPathfinding(startBlock, endBlock);
+
+        return pathBlocks;
+    }
+
     public LevelBlock[] GetSafePath(Vector3 center, int pathNodeCount, int radius, float agreesion)
     {
         ResetDebugHighlight();
@@ -359,7 +335,8 @@ public class LevelScanner : MonoBehaviour
 
         for (int i = 0; i < levelBlocks.Length; i++)
         {
-            levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
+            levelBlocks[i].EvaluateThreat(factors);
+            //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
         }
 
         for (int i = 0; i < pathNodeCount; i++)
@@ -382,7 +359,7 @@ public class LevelScanner : MonoBehaviour
         return results;
     }
 
-    public LevelBlock GetSafePosition()
+    public LevelBlock GetSafePosition(int radius = 3)
     {
         int myBlockX;
         int myBlockY;
@@ -391,10 +368,11 @@ public class LevelScanner : MonoBehaviour
 
         for (int i = 0; i < levelBlocks.Length; i++)
         {
-            levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
+            levelBlocks[i].EvaluateThreat(factors);
+            //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
         }
 
-        LevelBlock levelBlock = GetSafeBlockInRange(myBlockY, myBlockX, 3);
+        LevelBlock levelBlock = GetSafeBlockInRange(myBlockY, myBlockX, radius);
         currentTargetBlockIdx = levelBlock.row * col + levelBlock.col;
         return levelBlock;
     }
@@ -413,6 +391,8 @@ public class LevelScanner : MonoBehaviour
 
             for (int i = 0; i < blocksInRange.Count; i++)
             {
+                if (!blocksInRange[i].isOnNavMesh) continue;
+
                 if (blocksInRange[i].threatScore <= levelBlocks[saftestBlockIdx].threatScore)
                 {
                     saftestBlockIdx = i;
@@ -423,37 +403,16 @@ public class LevelScanner : MonoBehaviour
         }
 
         return null;
+    }
 
-        //int saftestBlockIdx = centerRow * this.col + centerCol;
+    LevelBlock GetBlock(Vector3 position)
+    {
+        int row;
+        int col;
 
-        //for (int offset_col = -offset; offset_col <= offset; offset_col++)
-        //{
-        //    for (int offset_row = -offset; offset_row <= offset; offset_row++)
-        //    {
-        //        int neighborRow = centerRow + offset_row;
-        //        int neighborCol = centerCol + offset_col;
+        GetBlockPosByPosition(position, out col, out row);
 
-        //        bool neighborRowInside = Mathf.Clamp(neighborRow, 0, this.row - 1) == neighborRow;
-        //        bool neighborColInside = Mathf.Clamp(neighborCol, 0, this.col - 1) == neighborCol;
-
-        //        if (neighborColInside && neighborRowInside)
-        //        {
-        //            int currentBlockIdx = neighborRow * this.col + neighborCol;
-        //            LevelBlock neighborBlock = levelBlocks[currentBlockIdx];
-
-        //            if (neighborBlock.isOnNavMesh)
-        //            {
-        //                neighborBlock.debugHighlight = true;
-
-        //                if(neighborBlock.threatScore <= levelBlocks[saftestBlockIdx].threatScore)
-        //                {
-        //                    saftestBlockIdx = currentBlockIdx;
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
-
+        return GetBlock(row, col);
     }
 
     LevelBlock GetBlock(int row, int col)
@@ -474,6 +433,7 @@ public class LevelScanner : MonoBehaviour
     {
         blockPos_x = (int)(position.x - offset.x) / 2;
         blockPos_y = (int)(position.z - offset.z) / 2;
+
         //Debug.Log("x:" + blockPos_x + ",y:" + blockPos_y);
     }
 
