@@ -19,6 +19,9 @@ public class Trainer : MonoBehaviour
     public TrainParameters trainParameters;
     public bool saveToDisk;
 
+    [Range(1, 100)]
+    public float trainSpeed = 1;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -37,6 +40,6 @@ public class Trainer : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+        Time.timeScale = trainSpeed;
     }
 }

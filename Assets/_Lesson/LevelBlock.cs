@@ -16,7 +16,7 @@ public class LevelBlock : IComparable<LevelBlock>
 
     public int occulsion_mul_enemyCount { get { return occulsion * enemyCount; } }
 
-    public float occulsion_reverse { get { return (occulsion == 0 ?  0 : 1f / occulsion); } }
+    public float occulsion_square { get { return (occulsion * occulsion); } }
 
     public float enemyCount_reverse { get { return (enemyCount == 0 ? 0 : 1f / enemyCount); } }
 
@@ -51,11 +51,48 @@ public class LevelBlock : IComparable<LevelBlock>
         return result;
     }
 
-    public void EvaluateThreat(float[] factors)
+    public void EvaluateThreat(List<LevelBlock> blocksInRange, float[] factors)
     {
-        this.threatScore =
-            (int)(occulsion * factors[0] + enemyCount * factors[1] +
-            occulsion_reverse * factors[2] + enemyCount_reverse * factors[3] +
-            occulsion_mul_enemyCount * factors[4] + occulsion_div_enemyCount * factors[5] + enemyCount_div_occulsion * factors[6]);
+        if (blocksInRange == null || blocksInRange.Count == 0) return;
+
+        this.threatScore = 0;
+
+        for (int i = 0; i < blocksInRange.Count; i++)
+        {
+            int relativePos = Mathf.Abs(this.row - blocksInRange[i].row) + Mathf.Abs(this.col - blocksInRange[i].col);
+
+            int baseScore = (int)(blocksInRange[i].occulsion * factors[0] + blocksInRange[i].enemyCount * factors[1] +
+            blocksInRange[i].occulsion_square * factors[2] + blocksInRange[i].enemyCount_reverse * factors[3] +
+            blocksInRange[i].occulsion_mul_enemyCount * factors[4] + blocksInRange[i].occulsion_div_enemyCount * factors[5] + blocksInRange[i].enemyCount_div_occulsion * factors[6]);
+
+            float scoreFactor = 1f / (1 + relativePos * relativePos);
+
+            //if (relativePos == 0)
+            //{
+            //    scoreFactor = 1f;
+            //}
+
+            //if (relativePos == 1)
+            //{
+            //    scoreFactor = 1f;
+            //}
+
+            //if (relativePos == 2)
+            //{
+            //    scoreFactor = 0.8f;
+            //}
+
+            //if (relativePos == 3)
+            //{
+            //    scoreFactor = 0.8f;
+            //}
+
+            //if (relativePos > 3)
+            //{
+            //    scoreFactor = 0;
+            //}
+
+            this.threatScore += (int)(baseScore * scoreFactor);
+        }
     }
 }

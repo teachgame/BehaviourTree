@@ -7,6 +7,9 @@ public class LevelScanner : MonoBehaviour
 {
     public Gradient threatColorGradient;
 
+    [Range(0,1)]
+    public float aggression = 0;
+
     public int row;
     public int col;
 
@@ -25,12 +28,12 @@ public class LevelScanner : MonoBehaviour
     LevelBlock endBlock;
     LevelBlock[] pathBlocks;
 
-    Vector3 offset = new Vector3(-36, 0, -36);
-
     float evaluateTimer = 0;
 
     public GameObject healthPrefab;
     private GameObject healthInstance;
+    private CompleteProject.PlayerHealth playerHealth;
+
 
     private LevelBlock blockWithHealth;
 
@@ -47,14 +50,14 @@ public class LevelScanner : MonoBehaviour
             {
                 int idx = i * col + t;
 
-                Vector3 pos = new Vector3(t * 2, 0, i * 2) + offset;
+                Vector3 pos = new Vector3(t * 2, 0, i * 2);
                 levelBlocks[idx] = new LevelBlock(i, t, pos);
 
                 NavMeshHit hit;
 
                 if(NavMesh.SamplePosition(pos, out hit, 0.2f, NavMesh.AllAreas))
                 {
-                    levelBlocks[idx].pos = hit.position;
+                    //levelBlocks[idx].pos = hit.position;
                     levelBlocks[idx].isOnNavMesh = true;
                     blocksOnMesh.Add(levelBlocks[idx]);
                 }
@@ -67,6 +70,8 @@ public class LevelScanner : MonoBehaviour
 
         InitThreatScore();
         SpawnHealth();
+
+        playerHealth = GetComponent<CompleteProject.PlayerHealth>();
     }
 
     // Update is called once per frame
@@ -80,12 +85,14 @@ public class LevelScanner : MonoBehaviour
             {
                 for (int i = 0; i < levelBlocks.Length; i++)
                 {
-                    levelBlocks[i].enemyCount = CheckEnemyCount(levelBlocks[i].pos, 1f);
+                    levelBlocks[i].enemyCount = CheckEnemyCount(levelBlocks[i].pos, 1.25f);
                 }
 
                 evaluateTimer = 0;
             }
         }
+
+        aggression = EvaluateAggression(0, 0.5f);
 
         if(Input.GetKeyDown(KeyCode.T))
         {
@@ -93,8 +100,8 @@ public class LevelScanner : MonoBehaviour
 
             for (int i = 0; i < levelBlocks.Length; i++)
             {
-                levelBlocks[i].EvaluateThreat(factors);
-                //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
+                List<LevelBlock> blocksInRange = GetBlocksInRange(levelBlocks[i].pos, 5);
+                levelBlocks[i].EvaluateThreat(blocksInRange, factors);
             }
 
             pathBlocks = AStarPathfinding(startBlock, GetBlock(18,18));
@@ -149,51 +156,6 @@ public class LevelScanner : MonoBehaviour
         }
     }
 
-    int EvaluateThreatScore(LevelBlock levelBlock, int radius)
-    {
-        int threatScore = 0;
-
-        List<LevelBlock> blocksInRange = GetBlocksInRange(levelBlock.pos, radius);
-
-        for(int i = 0; i < blocksInRange.Count; i++)
-        {
-            int relativePos = Mathf.Abs(levelBlock.row - blocksInRange[i].row) + Mathf.Abs(levelBlock.col - blocksInRange[i].col);
-
-            int baseScore = (int)(blocksInRange[i].enemyCount * (1 + (float)blocksInRange[i].occulsion / 8) * 10 + blocksInRange[i].occulsion);
-            float scoreFactor = 1f;
-
-            if (relativePos == 0)
-            {
-                scoreFactor = 1f;
-            }
-
-            if (relativePos == 1)
-            {
-                scoreFactor = 0.8f;
-            }
-
-            if (relativePos == 2)
-            {
-                scoreFactor = 0.5f;
-            }
-
-            if (relativePos == 3)
-            {
-                scoreFactor = 0.4f;
-            }
-
-            if (relativePos > 3)
-            {
-                scoreFactor = 0;
-            }
-
-            threatScore += (int)(baseScore * scoreFactor);
-        }
-
-        //Debug.Log(levelBlock.row + "," + levelBlock.col + ":" + threatScore);
-        return threatScore;
-    }
-
     int CheckEnemyCount(Vector3 position, float radius)
     {
         Collider[] cols = Physics.OverlapSphere(position, radius);
@@ -211,6 +173,12 @@ public class LevelScanner : MonoBehaviour
         }
 
         return enemies.Count;
+    }
+
+    float EvaluateAggression(float min, float max)
+    {
+        float hpRemains = (float)playerHealth.currentHealth / playerHealth.startingHealth;
+        return Mathf.Clamp(hpRemains, min, max);
     }
 
     int EvaluateOcculsion(int row, int col)
@@ -271,6 +239,97 @@ public class LevelScanner : MonoBehaviour
         }
     }
 
+    public LevelBlock GetSafeAreaCenter()
+    {
+        LevelBlock[] nearAreaCenters = GetNearAreaCenters();
+
+        int safeAreaIdx = -1;
+        int minAreaEnemyCount = int.MaxValue;
+
+        Debug.Log("Start Count Area");
+
+        for(int i = 0; i < nearAreaCenters.Length; i++)
+        {
+            if (nearAreaCenters[i] == null) continue;
+
+            int areaEnemyCount = GetAreaEnemyCount(nearAreaCenters[i], 1);
+
+            if(areaEnemyCount < minAreaEnemyCount)
+            {
+                minAreaEnemyCount = areaEnemyCount;
+                safeAreaIdx = i;
+            }
+        }
+
+        Debug.Log("End Count Area");
+
+        if (safeAreaIdx == -1)
+        {
+            return GetPlayerBlock();
+        }
+        else
+        {
+            if (nearAreaCenters[safeAreaIdx] == null)
+            {
+                return GetPlayerBlock();
+            }
+            else
+            {
+                return nearAreaCenters[safeAreaIdx];
+            }
+        }
+
+    }
+
+    public LevelBlock[] GetNearAreaCenters()
+    {
+        List<LevelBlock> centers = new List<LevelBlock>();
+
+        for(int i = -1; i <= 1; i++)
+        {
+            for(int t = -1; t <= 1; t++)
+            {
+                LevelBlock center = GetNearAreaCenter(i, t);
+
+                // 所有方格均不能移动的区域，设为空值
+                if(center != null && GetBlocksInRange(center.pos, 1).Count == 0)
+                {
+                    center = null;
+                }
+
+                centers.Add(center);
+            }
+        }
+
+        return centers.ToArray();
+    }
+
+    public LevelBlock GetNearAreaCenter(int offset_x, int offset_y)
+    {
+        LevelBlock playerBlock = GetPlayerBlock();
+        int center_row = playerBlock.row + offset_y * 3;
+        int center_col = playerBlock.col + offset_x * 3;
+
+        LevelBlock centerBlock = GetBlock(center_row, center_col);
+        return centerBlock;
+    }
+
+    public int GetAreaEnemyCount(LevelBlock centerBlock, int radius)
+    {
+        List<LevelBlock> area = GetBlocksInRange(centerBlock.pos, radius);
+
+        int totalEnemies = 0;
+
+        for(int i = 0; i < area.Count; i++)
+        {
+            totalEnemies += area[i].enemyCount;
+        }
+
+        //Debug.Log("Area Center:" + centerBlock.row + "," + centerBlock.col + ", Enemy Count:" + totalEnemies);
+
+        return totalEnemies;
+    }
+
     public List<LevelBlock> GetBlocksInRange(Vector3 center, int radius, bool excludeCenterBlock = false)
     {
         int centerCol;
@@ -319,9 +378,10 @@ public class LevelScanner : MonoBehaviour
 
         endBlock = GetSafePosition(radius);
 
-        startBlock = GetBlock(transform.position);
+        startBlock = GetPlayerBlock();
 
-        pathBlocks = AStarPathfinding(startBlock, endBlock);
+        pathBlocks = GetSafePath(startBlock.pos, 1 + radius, radius, aggression);
+        //pathBlocks = AStarPathfinding(startBlock, endBlock);
 
         return pathBlocks;
     }
@@ -335,7 +395,8 @@ public class LevelScanner : MonoBehaviour
 
         for (int i = 0; i < levelBlocks.Length; i++)
         {
-            levelBlocks[i].EvaluateThreat(factors);
+            blocksInRange = GetBlocksInRange(levelBlocks[i].pos, 5);
+            levelBlocks[i].EvaluateThreat(blocksInRange, factors);
             //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
         }
 
@@ -361,23 +422,26 @@ public class LevelScanner : MonoBehaviour
 
     public LevelBlock GetSafePosition(int radius = 3)
     {
-        int myBlockX;
-        int myBlockY;
+        //int myBlockX;
+        //int myBlockY;
 
-        GetBlockPosByPosition(transform.position, out myBlockX, out myBlockY);
+        //GetBlockPosByPosition(transform.position, out myBlockX, out myBlockY);
 
         for (int i = 0; i < levelBlocks.Length; i++)
         {
-            levelBlocks[i].EvaluateThreat(factors);
+            List<LevelBlock> blocksInRange = GetBlocksInRange(levelBlocks[i].pos, 5);
+            levelBlocks[i].EvaluateThreat(blocksInRange, factors);
             //levelBlocks[i].threatScore = EvaluateThreatScore(levelBlocks[i], 5);
         }
 
-        LevelBlock levelBlock = GetSafeBlockInRange(myBlockY, myBlockX, radius);
+        LevelBlock safeAreaCenter = GetSafeAreaCenter();
+        //Debug.Log("Area Center:" + safeAreaCenter.row + "," + safeAreaCenter.col);
+        LevelBlock levelBlock = GetSafeBlockInRange(safeAreaCenter.row, safeAreaCenter.col, radius, aggression);
         currentTargetBlockIdx = levelBlock.row * col + levelBlock.col;
         return levelBlock;
     }
 
-    public LevelBlock GetSafeBlockInRange(int centerRow, int centerCol, int offset)
+    public LevelBlock GetSafeBlockInRange(int centerRow, int centerCol, int offset, float aggression = 0)
     {
         //ResetDebugHighlight();
 
@@ -387,19 +451,40 @@ public class LevelScanner : MonoBehaviour
         {
             List<LevelBlock> blocksInRange = GetBlocksInRange(centerBlock.pos, offset);
 
-            int saftestBlockIdx = 0;
+            if(blocksInRange.Count == 0)
+            {
+                Debug.Log("Null: Area Center:" + centerRow + "," + centerCol);
+                return null;
+            }
+
+            blocksInRange.Sort();
+
+            int lowestThreat = blocksInRange[0].threatScore;
+            int highestThreat = blocksInRange[blocksInRange.Count - 1].threatScore;
+
+            int desireThreat = (int)Mathf.Lerp(lowestThreat, highestThreat, aggression);
+
+            Debug.Log("lowestThreat:" + lowestThreat);
+            Debug.Log("highestThreat:" + highestThreat);
+            Debug.Log("desireThreat:" + desireThreat);
+
+            int minDelta = highestThreat;
+            int desireBlockIdx = -1;
 
             for (int i = 0; i < blocksInRange.Count; i++)
             {
-                if (!blocksInRange[i].isOnNavMesh) continue;
+                int delta = Mathf.Abs(blocksInRange[i].threatScore - desireThreat);
+                //Debug.Log(i + ":" + blocksInRange[i].threatScore + "," + delta + "," + blocksInRange[i].isOnNavMesh);
 
-                if (blocksInRange[i].threatScore <= levelBlocks[saftestBlockIdx].threatScore)
+                if(delta < minDelta)
                 {
-                    saftestBlockIdx = i;
+                    minDelta = delta;
+                    desireBlockIdx = i;
                 }
             }
 
-            return blocksInRange[saftestBlockIdx];
+            Debug.Log("Desire Block : " + desireBlockIdx + ",score:" + blocksInRange[desireBlockIdx].threatScore + ", delta:" + minDelta + "," + blocksInRange[desireBlockIdx].isOnNavMesh);
+            return blocksInRange[desireBlockIdx];
         }
 
         return null;
@@ -419,7 +504,9 @@ public class LevelScanner : MonoBehaviour
     {
         int blockIdx = row * this.col + col;
 
-        if(blockIdx == Mathf.Clamp(blockIdx, 0, levelBlocks.Length))
+        //Debug.Log("Block Idx:" + blockIdx + ", Clamp:" + Mathf.Clamp(blockIdx, 0, levelBlocks.Length - 1));
+
+        if(blockIdx == Mathf.Clamp(blockIdx, 0, levelBlocks.Length - 1))
         {
             return levelBlocks[blockIdx];
         }
@@ -431,8 +518,8 @@ public class LevelScanner : MonoBehaviour
 
     void GetBlockPosByPosition(Vector3 position, out int blockPos_x, out int blockPos_y)
     {
-        blockPos_x = (int)(position.x - offset.x) / 2;
-        blockPos_y = (int)(position.z - offset.z) / 2;
+        blockPos_x = Mathf.RoundToInt(position.x) / 2;
+        blockPos_y = Mathf.RoundToInt(position.z) / 2;
 
         //Debug.Log("x:" + blockPos_x + ",y:" + blockPos_y);
     }
@@ -466,7 +553,6 @@ public class LevelScanner : MonoBehaviour
                     fmin = f;
                 }
             }
-
 
             // 找到移动成本最低的节点，设置为当前节点，将它移入检查完成的节点列表closedList
             // 如果当前节点就是目标节点，执行保存路径操作
@@ -578,6 +664,8 @@ public class LevelScanner : MonoBehaviour
 
     void OnGUI()
     {
+        return;
+
         if (!showDebug) return;
 
         for(int i = 0; i < levelBlocks.Length; i++)
@@ -596,7 +684,7 @@ public class LevelScanner : MonoBehaviour
         {
             for (int i = 0; i < levelBlocks.Length; i++)
             {
-                if(levelBlocks[i].isOnNavMesh)
+                if (levelBlocks[i].isOnNavMesh)
                 {
                     if (levelBlocks[i].debugHighlight)
                     {
@@ -610,8 +698,9 @@ public class LevelScanner : MonoBehaviour
                     }
                 }
             }
+            return;
 
-            if(blockWithHealth != null)
+            if (blockWithHealth != null)
             {
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawCube(blockWithHealth.pos + Vector3.up * 5, new Vector3(0.1f, 10f, 0.1f));
@@ -638,6 +727,10 @@ public class LevelScanner : MonoBehaviour
                     Gizmos.DrawCube(pathBlocks[i].pos + Vector3.up * height / 2, new Vector3(0.2f, height, 0.2f));
                 }
             }
+
+            Gizmos.color = Color.blue;
+            Gizmos.DrawCube(GetPlayerBlock().pos + Vector3.up * 0.5f, new Vector3(0.1f, 1f, 0.1f));
+
         }
     }
 }

@@ -13,6 +13,8 @@ public class FindSafePositionActionTask : ActionTask
     public BBParameter<List<LevelBlock>> safePath;
     private LevelScanner levelScanner;
 
+    private float timer;
+
     protected override void OnExecute()
     {
         base.OnExecute();
@@ -31,20 +33,27 @@ public class FindSafePositionActionTask : ActionTask
 
     private void FindSafePosition()
     {
-        LevelBlock[] safePathNodes = levelScanner.GetSafePath(ownerAgent.transform.position, 2);
+        timer += Time.deltaTime;
 
-        if (safePathNodes.Length > 0)
+        if(timer > 0.5f)
         {
-            safeBlock.value = safePathNodes[safePathNodes.Length - 1];
+            timer = 0;
 
-            safePath.value.Clear();
+            LevelBlock[] safePathNodes = levelScanner.GetSafePath(ownerAgent.transform.position, 2);
 
-            for (int i = 0; i < safePathNodes.Length; i++)
+            if (safePathNodes.Length > 0)
             {
-                safePath.value.Add(safePathNodes[i]);
-            }
-        }
+                safeBlock.value = safePathNodes[safePathNodes.Length - 1];
 
-        //safeBlock.value = levelScanner.GetSafePosition();
+                safePath.value.Clear();
+
+                for (int i = 0; i < safePathNodes.Length; i++)
+                {
+                    safePath.value.Add(safePathNodes[i]);
+                }
+            }
+
+            //safeBlock.value = levelScanner.GetSafePosition();
+        }
     }
 }

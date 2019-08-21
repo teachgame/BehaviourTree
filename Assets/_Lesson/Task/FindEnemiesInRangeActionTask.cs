@@ -46,6 +46,18 @@ public class FindEnemiesInRangeActionTask : ActionTask
 
         for(int i = 0; i < cols.Length; i++)
         {
+            Vector3 ownerCenter = ownerAgent.GetComponent<Collider>().bounds.center;
+            Vector3 targetCenter = cols[i].bounds.center;
+
+            Vector3 direction = (targetCenter - ownerCenter).normalized;
+
+            RaycastHit hit;
+
+            if(Physics.Raycast(ownerCenter, direction, out hit))
+            {
+                if (hit.collider != cols[i]) continue;
+            }
+
             CompleteProject.EnemyHealth enemyHealth = cols[i].GetComponent<CompleteProject.EnemyHealth>();
             //Debug.Log("Find:" + cols[i].gameObject.name);
 
