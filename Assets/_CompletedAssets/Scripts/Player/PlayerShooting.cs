@@ -22,6 +22,7 @@ namespace CompleteProject
 		public Light faceLight;								// Duh
         float effectsDisplayTime = 0.2f;                // The proportion of the timeBetweenBullets that the effects will display for.
 
+        public GameObject explosionEffect;
 
         void Awake ()
         {
@@ -123,6 +124,30 @@ namespace CompleteProject
                 // ... set the second position of the line renderer to the fullest extent of the gun's range.
                 gunLine.SetPosition (1, shootRay.origin + shootRay.direction * range);
             }
+        }
+
+        public void Bomb()
+        {
+            Collider[] cols = Physics.OverlapSphere(transform.position, 6f);
+
+            for(int i = 0; i < cols.Length; i++)
+            {
+                EnemyHealth enemyHealth = cols[i].GetComponent<EnemyHealth>();
+
+                if(enemyHealth)
+                {
+                    enemyHealth.TakeDamage(enemyHealth.startingHealth, enemyHealth.transform.position);
+                }
+            }
+
+            explosionEffect.SetActive(false);
+            explosionEffect.SetActive(true);
+        }
+
+        void OnDrawGizmos()
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(transform.position, 6f);
         }
     }
 }

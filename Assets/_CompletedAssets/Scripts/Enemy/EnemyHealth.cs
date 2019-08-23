@@ -18,6 +18,7 @@ namespace CompleteProject
         bool isDead;                                // Whether the enemy is dead.
         bool isSinking;                             // Whether the enemy has started sinking through the floor.
 
+        private PlayerHealth player;
 
         void Awake ()
         {
@@ -29,6 +30,8 @@ namespace CompleteProject
 
             // Setting the current health when the enemy first spawns.
             currentHealth = startingHealth;
+
+            player = GameObject.Find("Player").GetComponent<PlayerHealth>();
         }
 
 
@@ -75,6 +78,8 @@ namespace CompleteProject
         {
             // The enemy is dead.
             isDead = true;
+
+            player.OnEnemyDie();
 
             // Turn the collider into a trigger so shots can pass through it.
             capsuleCollider.isTrigger = true;

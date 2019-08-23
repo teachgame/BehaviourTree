@@ -18,7 +18,7 @@ namespace NodeCanvas.Tasks.Actions
         public BBParameter<float> speed = 4;
         public BBParameter<float> keepDistance = 0.1f;
 
-        private Vector3? lastRequest;
+        private LevelBlock lastRequest;
 
         protected override string info
         {
@@ -28,6 +28,7 @@ namespace NodeCanvas.Tasks.Actions
         protected override void OnExecute()
         {
             agent.speed = speed.value;
+
             if (Vector3.Distance(agent.transform.position, targetBlock.value.pos) < agent.stoppingDistance + keepDistance.value)
             {
                 EndAction(true);
@@ -37,7 +38,7 @@ namespace NodeCanvas.Tasks.Actions
 
         protected override void OnUpdate()
         {
-            if (lastRequest != targetBlock.value.pos)
+            if (lastRequest != targetBlock.value)
             {
                 if (!agent.SetDestination(targetBlock.value.pos))
                 {
@@ -46,7 +47,7 @@ namespace NodeCanvas.Tasks.Actions
                 }
             }
 
-            lastRequest = targetBlock.value.pos;
+            lastRequest = targetBlock.value;
 
             if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + keepDistance.value)
             {

@@ -11,18 +11,18 @@ public class FindEnemiesInRangeActionTask : ActionTask
 {
     public BBParameter<GameObject> target;
     public BBParameter<List<GameObject>> enemies;
+
+    public BBParameter<int> enemyCountInBombRange;
+
     public BBParameter<float> radius;
 
     protected override void OnExecute()
     {
         base.OnExecute();
 
-        if (target.value == null)
-        {
-            FindEnemy();
-            //Debug.Log("Find Enemy");
-        }
-        else
+        FindEnemy();
+
+        if (target.value != null)
         {
             CompleteProject.EnemyHealth enemyHealth = target.value.GetComponent<CompleteProject.EnemyHealth>();
             if(enemyHealth.currentHealth <= 0)
@@ -43,6 +43,8 @@ public class FindEnemiesInRangeActionTask : ActionTask
 
         int nearestEnemyIdx = 0;
         float nearestSqrDistance = 10000;
+
+        enemyCountInBombRange.value = 0;
 
         for(int i = 0; i < cols.Length; i++)
         {
@@ -67,7 +69,13 @@ public class FindEnemiesInRangeActionTask : ActionTask
                 if (enemies.Contains(enemyHealth.gameObject)) continue;
 
                 float sqrDistance = Vector3.SqrMagnitude(ownerAgent.transform.position - enemyHealth.transform.position);
-                if(sqrDistance < nearestSqrDistance)
+
+                if(sqrDistance < 6 * 6)
+                {
+                    enemyCountInBombRange.value++;
+                }
+
+                if (sqrDistance < nearestSqrDistance)
                 {
                     nearestSqrDistance = sqrDistance;
                     nearestEnemyIdx = enemies.Count;
@@ -80,8 +88,11 @@ public class FindEnemiesInRangeActionTask : ActionTask
         if(enemies.Count > 0)
         {
             //Debug.Log("Find Enemy:" + enemies.Count);
-            this.enemies.value = enemies;
-            this.target.value = this.enemies.value[nearestEnemyIdx];
+            if(this.target.value == null)
+            {
+                this.enemies.value = enemies;
+                this.target.value = this.enemies.value[nearestEnemyIdx];
+            }
         }
         else
         {

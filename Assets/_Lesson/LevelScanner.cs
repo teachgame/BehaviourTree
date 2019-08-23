@@ -125,16 +125,17 @@ public class LevelScanner : MonoBehaviour
 
     void SpawnHealth()
     {
+        CancelInvoke();
         if(healthInstance != null)
         {
             Destroy(healthInstance);
         }
 
-        LevelBlock levelBlock = GetRandomBlockOnMesh();
+        LevelBlock levelBlock = GetRandomBlockAroundPlayer();
         healthInstance = GameObject.Instantiate(healthPrefab, levelBlock.pos, Quaternion.identity);
         blockWithHealth = levelBlock;
 
-        Invoke("SpawnHealth", 20);
+        Invoke("SpawnHealth", 15);
     }
 
     LevelBlock GetRandomBlockOnMesh()
@@ -142,6 +143,15 @@ public class LevelScanner : MonoBehaviour
         int idx = Random.Range(0, blocksOnMesh.Count);
         return blocksOnMesh[idx];
     }
+
+    LevelBlock GetRandomBlockAroundPlayer()
+    {
+        List<LevelBlock> blocksAroundPlayer = GetBlocksInRange(transform.position, 8, true);
+
+        int idx = Random.Range(0, blocksAroundPlayer.Count);
+        return blocksAroundPlayer[idx];
+    }
+
 
     void InitThreatScore()
     {
